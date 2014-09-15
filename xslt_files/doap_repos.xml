@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<repo_list>
+
+    <project>
+        <name>Apache_ActiveMQ.rdf</name>
+        <repo>https://git-wip-us.apache.org/repos/asf/activemq.git</repo>
+    </project>
+    
+    <project>
+        <name>Apache_Airavata.rdf</name>
+        <repo>https://git-wip-us.apache.org/repos/asf/airavata.git</repo>
+    </project>
+    
+    <project>
+        <name>Apache_Allura.rdf</name>
+        <repo>https://git-wip-us.apache.org/repos/asf/allura</repo>
+    </project>
+    
+    <project>
+        <name>Apache_Camel.rdf</name>
+        <repo>https://git-wip-us.apache.org/repos/asf/camel.git</repo>
+    </project>
+    
+    <project>
+        <name>Apache_CouchDB.rdf</name>
+        <repo>https://git-wip-us.apache.org/repos/asf/couchdb.git</repo>
+    </project>
+    
+    <project>
+        <name>Apache_Empire-db.rdf</name>
+        <repo>http://svn.apache.org/repos/asf/empire-db/trunk</repo>
+    </project>
+    
+    <project>
+        <name>Apache_Lucene.Net.rdf</name>
+        <repo>https://git-wip-us.apache.org/repos/asf/lucenenet.git</repo>
+    </project>
+    
+    <project>
+        <name>Apache_Marmotta.rdf</name>
+        <repo>https://git-wip-us.apache.org/repos/asf/marmotta.git</repo>
+    </project>
+    
+    <project>
+        <name>Apache_Lucene.rdf</name>
+        <repo>http://svn.apache.org/repos/asf/lucene/dev/trunk/lucene</repo>
+    </project>
+    
+    <project>
+        <name>Apache_Solr.rdf</name>
+        <repo>http://svn.apache.org/viewvc/lucene/solr/</repo>
+    </project>
+    
+    <project>
+        <name>Apache_Olingo.rdf</name>
+        <repo>http://svn.apache.org/repos/asf/olingo/site/trunk</repo>
+    </project>
+    
+    <project>
+        <name>Apache_Spark.rdf</name>
+        <repo>git://github.com/apache/spark.git</repo>
+    </project>
+    
+    <project>
+        <name>Apache_Struts.rdf</name>
+        <repo>https://git-wip-us.apache.org/repos/asf/struts.git</repo>
+    </project>
+    
+    <project>
+        <name>Apache_Axiom.rdf</name>
+        <repo>https://svn.apache.org/repos/asf/webservices/axiom/tags/1.2.14</repo>
+    </project>
+    
+    <project>
+        <name>Apache_Hivemind.rdf</name>
+        <repo>http://svn.apache.org/repos/asf/hivemind/hivemind1</repo>
+    </project>
+    
+    <project>
+        <name>Apache_log4cxx.rdf</name>
+        <repo>https://svn.apache.org/repos/asf/incubator/log4cxx/trunk</repo>
+    </project>
+    
+</repo_list>

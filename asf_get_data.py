@@ -3,6 +3,7 @@
 from lxml import etree
 from urllib.request import urlopen, Request, HTTPError, URLError
 import os, re, sys, stat, time, dbm, re, subprocess
+import asf_parse, asf_get_commit_log, asf_db_client
 
 DOAP_LIST_URL = 'http://svn.apache.org/repos/asf/infrastructure/site-tools/trunk/projects/files.xml'
 DOAP_REPOS_DB = 'doap_files/doap_repos.db'
@@ -51,9 +52,9 @@ def generate_doap_file():
         return False, "Resource returned by DOAP_LIST_URL does not contain pointers to doap files"
     else:
         save_file(doap_xml, file_name)
-    
+        
     return True, "OK"
-
+        
 def generate_if_modified_since(file_path):
     """
     Given path to local file, return if-modified-since header using last modified date of file.
@@ -102,6 +103,7 @@ def save_file(content, file_path, write_mode='w'):
 def generate_rdf_files():
     """
     Using the list of DOAP files retrieved by calling generate_doap_file(), download each individual DOAP file to disk.
+    If doap file has not been modified since last download, do not download.
     """
     
     new_doaps = []
@@ -127,12 +129,24 @@ def generate_rdf_files():
             if res.code == 304:
                 continue
             else:
-                return False, "Failed to retrieve {0}.  Status code: {1}.".format(location.text, res.code)
+                return False, "Failed to retrieve {0}.  Status code: {1}.".format(location.text, res.code), []
         else:
             xml, file_name = transform_rdf(res.read())
-            db[location.text] = res.info()['date'] + "," + file_name            
+            
+            # If HTTP reponse does not have last-modified header, perform diff to check if file is modified
+            if not res.info()['last-modified']:
+                db[location.text] = res.info()['date'] + "|" + file_name 
+                if os.path.isfile('doap_files/' + file_name):
+                    with open('doap_files/' + file_name, "r") as file:
+                        data = file.read()
+                    if str(xml) == data:
+                        continue
+            else:
+                db[location.text] = res.info()['last-modified'] + "|" + file_name
+                            
             if not save_file(str(xml), 'doap_files/' + file_name):
                 return False, "Failed to save file {0}.".format(file_name), []
+            print("Saved new doap file from {0}".format(location.text))
             new_doaps.append(file_name)
                 
     return True, "OK", new_doaps
@@ -150,29 +164,51 @@ def add_missing_repo(doap, file_name):
 
 def generate_doap_repos_db():
     """
-    Create persistent map object on disk; object maps doap file url to file name and last modified date.
+    Create persistent map object on disk; object maps doap filename to repo url.
+    Special entry db['last-modified'] returns date when doap_repos.xml was last modified.
     """
     
-    if os.path.isfile(DOAP_REPOS_DB):
-        db = dbm.open('doap_files/doap_repos', 'c')
-        if db['last-modified'] == str(os.stat(DOAP_REPOS_XML).st_mtime):
-            return True, "OK"
-    
+    # If doap_repos.xml does not exist, exit
     if not os.path.isfile(DOAP_REPOS_XML):
         return False, "Could not locate {0}.".format(DOAP_REPOS_XML)
+    
+    # Check if doaps_repos.xml has been updated since last time doap_repos.db was generated
+    db = dbm.open('doap_files/doap_repos', 'c')
+    last_modified = str(os.stat(DOAP_REPOS_XML).st_mtime)
+    if 'last-modified' in db and db['last-modified'] == last_modified:
+        return True, "OK"
+    else:
+        db['last-modified'] = last_modified
     
     tree = etree.parse(DOAP_REPOS_XML)
     root = tree.getroot()
     
-    db = dbm.open('doap_files/doap_repos', 'c')
-    db['last-modified'] = str(os.stat(DOAP_REPOS_XML).st_mtime)
-    
+    projects = ['last-modified']
     for project in root.iter('project'):
         key = project[0].text
+        projects.append(key)
         val = project[1].text
         db[key] = val
     
+    if not clean_doap_repos_db(projects):
+        return False, "Failed to clean doap_repos.db file."
+    
     return True, "OK"
+
+def clean_doap_repos_db(projects):
+    """
+    Remove projects from doap_repos.db no longer listed in doap_repos.xml.
+    """
+    
+    db = dbm.open('doap_files/doap_repos', 'c')
+    
+    for key in db.keys():
+        key = key.decode("utf-8")
+        if key not in projects:
+            del db[key]
+            print("Removed {0} entry from doap_repos.db".format(key))
+    
+    return True
 
 def transform_rdf(rdf_content):
     """
@@ -191,8 +227,8 @@ def transform_rdf(rdf_content):
     if file_name in db:
         result_tree = add_missing_repo(result_tree, file_name)
     
-    repo = result_tree.find('repository') 
-    clean_repo_name = re.sub( 'git:http', 'http', repo.text)
+    repo = result_tree.find('repository')
+    clean_repo_name = re.sub('git:http', 'http', repo.text)
     
     if "asf?" in clean_repo_name:
         m = re.search("(.*asf)\?p=(.*\.git).*", clean_repo_name)
@@ -213,82 +249,20 @@ def generate_commit_logs():
             os.makedirs('git_repos')
             output = subprocess.check_output(["git", "init", "git_repos"], stderr=subprocess.STDOUT).decode("utf-8")
             if not "Initialized empty Git repository" in output:
-                return False, "Failed to initialize git repo."
+                return False, "Failed to initialize Git repo."
 
     for f in files:
         if 'rdf' in str(f):
             tree = etree.parse('doap_files/' + f)
             root = tree.getroot()
             repo = root.find('repository').text
-            if 'svn.apache.org/repos' in repo:
-                process_svn_repo(repo)
+            project_name = root.find('name').text
+            if 'svn' in repo:
+                asf_get_commit_log.get_svn_log(repo, project_name)
             if '.git' in repo:
-                process_git_repo(repo)
+                asf_get_commit_log.get_git_log(repo, project_name)
     
     return True, "OK"
-
-def process_svn_repo(repo):
-    """
-    Download commit log from specified SVN repo.
-    """
-    
-    return True, "OK"
-
-def process_git_repo(repo):
-    """
-    Download commit log from specified Git repo.
-    """
-    
-    basename = os.path.basename(repo)
-    m = re.search('([a-zA-Z0-9_\-]*)\.git', basename)
-    shortname = m.group(1)
-
-    cwd = os.getcwd()
-    os.chdir('git_repos')
-    
-    try:
-        remote_info = subprocess.check_output(["git", "remote", "-v"], stderr=subprocess.STDOUT).decode("utf-8")
-    except:
-        print("Failed to retrieve remote info.")
-        os.chdir(cwd)
-        return False
-        
-    if not repo in remote_info:
-        try:
-            add_repo_info = subprocess.check_output(["git", "remote", "add", shortname, repo], stderr=subprocess.STDOUT).decode("utf-8")
-        except:
-            print("Failed to add remote repo {0}.".format(shortname))
-            os.chdir(cwd)
-            return False
-            
-    try:
-        fetch_info = subprocess.check_output(["git", "fetch", shortname], stderr=subprocess.STDOUT).decode("utf-8")
-    except:
-        print("Failed to read from remote repository {0}.".format(shortname))
-        os.chdir(cwd)
-        return False
-        
-    try:   
-        checkout_info = subprocess.check_output(["git", "checkout", "-f", "remotes/" + shortname + "/master"], stderr=subprocess.STDOUT).decode("utf-8")
-    except:
-        try:
-            checkout_info = subprocess.check_output(["git", "checkout", "-f", "remotes/" + shortname + "/trunk"], stderr=subprocess.STDOUT).decode("utf-8")
-        except:
-            print("Failed to checkout {0} master branch".format(shortname))
-            os.chdir(cwd)
-            return False    
-        
-    try:
-        log_info = subprocess.check_output(["git", "log", "-1"], stderr=subprocess.STDOUT).decode("utf-8")
-    except:
-        print("Failed to retrieve commit log from {0}.".format(shortname))
-        os.chdir(cwd)
-        return False
-    
-    print(shortname)
-    print(log_info)
-    os.chdir(cwd)
-    return True
 
 
 ############################################################################################################
@@ -312,10 +286,18 @@ def main():
         print(msg)
         return
     
-    # for doap in updated_doap_list:
-        # update_project_records(doap)
+    res = asf_db_client.open_connection()
+    
+    if not res:
+        print("Failed to open database.")
+        return
+    
+    for doap in updated_doap_list:
+        asf_parse.parse_doap(doap)
 
     res, msg = generate_commit_logs()
+    
+    asf_db_client.close_connection()
     
     if not res:
         print(msg)

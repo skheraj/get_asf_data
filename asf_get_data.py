@@ -3,7 +3,7 @@
 from lxml import etree
 from urllib.request import urlopen, Request, HTTPError, URLError
 import os, re, sys, stat, time, dbm, re, subprocess
-import asf_parse, asf_get_commit_log, asf_db_client
+import asf_parse, asf_get_commit_log, asf_db_client, asf_get_jira_data
 
 DOAP_LIST_URL = 'http://svn.apache.org/repos/asf/infrastructure/site-tools/trunk/projects/files.xml'
 DOAP_REPOS_DB = 'doap_files/doap_repos.db'
@@ -106,10 +106,11 @@ def generate_rdf_files():
     If doap file has not been modified since last download, do not download.
     """
     
+    # doap_url.db maps the url for the project's doap file to the project's name and the url's last modified date
     new_doaps = []
     if not os.path.exists('doap_files'):
         os.makedirs('doap_files')
-    db = dbm.open('doap_files/doap', 'c')
+    db = dbm.open('doap_files/doap_url', 'c')
     
     res, msg = generate_doap_repos_db()
     if not res:
@@ -156,7 +157,7 @@ def add_missing_repo(doap, file_name):
     Add repo location if not included in DOAP file.
     """
     
-    db = dbm.open('doap_files/doap_repos', 'c')
+    db = dbm.open('doap_files/missing_repos', 'c')
     repo = doap.find('repository')
     repo.text = db[file_name]
     
@@ -173,7 +174,7 @@ def generate_doap_repos_db():
         return False, "Could not locate {0}.".format(DOAP_REPOS_XML)
     
     # Check if doaps_repos.xml has been updated since last time doap_repos.db was generated
-    db = dbm.open('doap_files/doap_repos', 'c')
+    db = dbm.open('doap_files/missing_repos', 'c')
     last_modified = str(os.stat(DOAP_REPOS_XML).st_mtime)
     if 'last-modified' in db and db['last-modified'] == last_modified:
         return True, "OK"
@@ -200,7 +201,7 @@ def clean_doap_repos_db(projects):
     Remove projects from doap_repos.db no longer listed in doap_repos.xml.
     """
     
-    db = dbm.open('doap_files/doap_repos', 'c')
+    db = dbm.open('doap_files/missing_repos', 'c')
     
     for key in db.keys():
         key = key.decode("utf-8")
@@ -222,7 +223,7 @@ def transform_rdf(rdf_content):
     name = result_tree.find('name')
     file_name = name.text.replace(" ", "_") + '.rdf'
     
-    db = dbm.open('doap_files/doap_repos', 'c')
+    db = dbm.open('doap_files/missing_repos', 'c')
     
     if file_name in db:
         result_tree = add_missing_repo(result_tree, file_name)
@@ -286,22 +287,56 @@ def main():
         print(msg)
         return
     
+    ######### OPEN DATABASE #############
     res = asf_db_client.open_connection()
     
     if not res:
         print("Failed to open database.")
         return
+    #####################################
     
     for doap in updated_doap_list:
         asf_parse.parse_doap(doap)
 
-    res, msg = generate_commit_logs()
-    
+    ########## CLOSE DATABASE ###########
     asf_db_client.close_connection()
+    #####################################
+    
+    ######### OPEN DATABASE #############
+    res = asf_db_client.open_connection()
+    
+    if not res:
+        print("Failed to open database.")
+        return
+    #####################################
+
+    res, msg = generate_commit_logs()
     
     if not res:
         print(msg)
         return
+        
+    ########## CLOSE DATABASE ###########
+    asf_db_client.close_connection()
+    #####################################
+    
+    ######### OPEN DATABASE #############
+    res = asf_db_client.open_connection()
+    
+    if not res:
+        print("Failed to open database.")
+        return
+    #####################################
+    
+    res, msg = asf_get_jira_data.generate_jira_data()
+    
+    if not res:
+        print(msg)
+        return
+    
+    ########## CLOSE DATABASE ###########
+    asf_db_client.close_connection()
+    #####################################
 
 if __name__ == '__main__':
     main()

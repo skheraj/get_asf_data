@@ -3,5 +3,4 @@ files.xml
 git_repos/
 doap_files/
 __pycache__/
-last_rev_num.db
-db_credentials.db
+*.db

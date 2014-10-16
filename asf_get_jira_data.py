@@ -67,28 +67,15 @@ def get_all_issues(key, name):
 
     last_update_date = datetime.strptime(date_str, "%Y-%m-%dT%H:%M:%S.%f%z")
 
-    # 'EXEC' is a reserved JQL word. You must surround it in quotation marks to use it in a query.
-    if key == 'EXEC':
-        issues = JIRA_CONN.search_issues("project='EXEC' AND updated>" + "'" + last_update_date.strftime("%Y/%m/%d %H:%M") + "'", startAt=0, maxResults=100)
-        size = len(issues)
-        n = 100
-        
-        while size == 100:
-            tmp_issues = JIRA_CONN.search_issues("project='EXEC' AND updated>" + "'" + last_update_date.strftime("%Y/%m/%d %H:%M") + "'", startAt=n, maxResults=100)
-            size = len(tmp_issues)
-            issues = issues + tmp_issues
-            n = n + 100
-        
-    else:
-        issues = JIRA_CONN.search_issues("project=" + key + " AND updated>" + "'" + last_update_date.strftime("%Y/%m/%d %H:%M") + "'", startAt=0, maxResults=100)
-        size = len(issues)
-        n = 100
-        
-        while size == 100:
-            tmp_issues = JIRA_CONN.search_issues("project=" + key + " AND updated>" + "'" + last_update_date.strftime("%Y/%m/%d %H:%M") + "'", startAt=n, maxResults=100)
-            size = len(tmp_issues)
-            issues = issues + tmp_issues
-            n = n + 100
+    issues = JIRA_CONN.search_issues("project='" + key + "' AND updated>" + "'" + last_update_date.strftime("%Y/%m/%d %H:%M") + "'", startAt=0, maxResults=100)
+    size = len(issues)
+    n = 100
+    
+    while size == 100:
+        tmp_issues = JIRA_CONN.search_issues("project='" + key + "' AND updated>" + "'" + last_update_date.strftime("%Y/%m/%d %H:%M") + "'", startAt=n, maxResults=100)
+        size = len(tmp_issues)
+        issues = issues + tmp_issues
+        n = n + 100
 
     for i in issues:
         issue = {}
